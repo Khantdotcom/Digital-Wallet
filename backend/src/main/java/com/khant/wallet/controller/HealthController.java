@@ -1,6 +1,7 @@
 package com.khant.wallet.controller;
 
 import java.util.Map;
+
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -10,4 +11,10 @@ public class HealthController {
   public Map<String, String> health() {
     return Map.of("status", "ok");
   }
+
+    @GetMapping("/secure-test")
+  public String secure() {
+    return "secured";
+  }
+
 }

@@ -1,2 +1,3 @@
 /home/unix/Documents/Java Projects/Digital-Wallet/backend/src/main/java/com/khant/wallet/WalletApiApplication.java
 /home/unix/Documents/Java Projects/Digital-Wallet/backend/src/main/java/com/khant/wallet/controller/HealthController.java
+/home/unix/Documents/Java Projects/Digital-Wallet/backend/src/main/java/com/khant/wallet/security/SecurityConfig.java
