@@ -1,0 +1,9 @@
+services:
+  db:
+    image: postgres:16.0
+    environment:
+      POSTGRES_DB: walletdb
+      POSTGRES_USER: wallet
+      POSTGRES_PASSWORD: wallet
+    ports:
+      - "5433:5432"
