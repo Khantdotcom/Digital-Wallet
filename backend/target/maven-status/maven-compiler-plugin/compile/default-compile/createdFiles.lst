@@ -1,3 +1,5 @@
-com/khant/wallet/WalletApiApplication.class
+com/khant/wallet/repository/UserRepository.class
+com/khant/wallet/domain/User.class
 com/khant/wallet/security/SecurityConfig.class
 com/khant/wallet/controller/HealthController.class
+com/khant/wallet/WalletApiApplication.class
