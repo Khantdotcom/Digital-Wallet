@@ -60,6 +60,46 @@ public class GlobalExceptionHandler {
     return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(body);
   }
 
+
+  @ExceptionHandler(WalletNotFoundException.class)
+  public ResponseEntity<ApiErrorResponse> handleWalletNotFound(WalletNotFoundException ex) {
+    ApiErrorResponse body = new ApiErrorResponse(
+        Instant.now(),
+        HttpStatus.NOT_FOUND.value(),
+        HttpStatus.NOT_FOUND.getReasonPhrase(),
+        ex.getMessage(),
+        Map.of()
+    );
+
+    return ResponseEntity.status(HttpStatus.NOT_FOUND).body(body);
+  }
+
+  @ExceptionHandler(InsufficientFundsException.class)
+  public ResponseEntity<ApiErrorResponse> handleInsufficientFunds(InsufficientFundsException ex) {
+    ApiErrorResponse body = new ApiErrorResponse(
+        Instant.now(),
+        HttpStatus.BAD_REQUEST.value(),
+        HttpStatus.BAD_REQUEST.getReasonPhrase(),
+        ex.getMessage(),
+        Map.of()
+    );
+
+    return ResponseEntity.badRequest().body(body);
+  }
+
+  @ExceptionHandler(IllegalArgumentException.class)
+  public ResponseEntity<ApiErrorResponse> handleBadRequest(IllegalArgumentException ex) {
+    ApiErrorResponse body = new ApiErrorResponse(
+        Instant.now(),
+        HttpStatus.BAD_REQUEST.value(),
+        HttpStatus.BAD_REQUEST.getReasonPhrase(),
+        ex.getMessage(),
+        Map.of()
+    );
+
+    return ResponseEntity.badRequest().body(body);
+  }
+
   @ExceptionHandler(Exception.class)
   public ResponseEntity<ApiErrorResponse> handleUnexpected(Exception ex, HttpServletRequest request) {
     ApiErrorResponse body = new ApiErrorResponse(
