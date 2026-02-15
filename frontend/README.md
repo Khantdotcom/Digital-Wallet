@@ -42,3 +42,12 @@ npx serve frontend -l 4173
 cd frontend
 php -S localhost:4173
 ```
+## Run
+
+From repo root:
+
+```bash
+python -m http.server 4173 -d frontend
+```
+
+Then open `http://localhost:4173`.
