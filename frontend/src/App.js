@@ -54,7 +54,16 @@ export function App({ initialAuthView = "login" }) {
     try {
       const res = await fetch(url, { ...options, signal: controller.signal });
       const text = await res.text();
-      const data = text ? JSON.parse(text) : null;
+      let data = null;
+      if (text) {
+        try {
+          data = JSON.parse(text);
+        } catch {
+          if (res.ok) {
+            throw new Error("Received an invalid API response. Please check backend logs.");
+          }
+        }
+      }
 
       if (!res.ok) {
         const message = data?.message || data?.error || fallbackMessage;
@@ -65,6 +74,9 @@ export function App({ initialAuthView = "login" }) {
     } catch (error) {
       if (error.name === "AbortError") {
         throw new Error("Request timed out. Check API base URL and backend status.");
+      }
+      if (error.name === "TypeError") {
+        throw new Error(`Unable to reach API at ${apiBase}. Check API Base URL, backend status, and CORS settings.`);
       }
       throw error;
     } finally {
