@@ -6,6 +6,8 @@ import com.khant.wallet.domain.Wallet;
 import com.khant.wallet.domain.WalletTransaction;
 import com.khant.wallet.dto.CreateWalletRequest;
 import com.khant.wallet.dto.MoneyRequest;
+import com.khant.wallet.dto.PageResponse;
+import com.khant.wallet.dto.TransactionHistoryItemResponse;
 import com.khant.wallet.dto.TransferRequest;
 import com.khant.wallet.exception.InsufficientFundsException;
 import com.khant.wallet.exception.WalletNotFoundException;
@@ -16,6 +18,8 @@ import com.khant.wallet.repository.WalletRepository;
 import com.khant.wallet.repository.WalletTransactionRepository;
 import java.math.BigDecimal;
 import java.util.List;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -150,5 +154,36 @@ public class WalletService {
     walletTransactionRepository.save(inTx);
 
     return List.of(source, target);
+  }
+
+  @Transactional(readOnly = true)
+  public PageResponse<TransactionHistoryItemResponse> getTransactionHistory(Long userId, Long walletId, Pageable pageable) {
+    walletRepository.findByIdAndUserId(walletId, userId).orElseThrow(() -> new WalletNotFoundException(walletId));
+
+    Page<TransactionHistoryItemResponse> page = walletTransactionRepository
+        .findByWalletIdAndWalletUserId(walletId, userId, pageable)
+        .map(this::toHistoryItem);
+
+    return new PageResponse<>(
+        page.getContent(),
+        page.getNumber(),
+        page.getSize(),
+        page.getTotalElements(),
+        page.getTotalPages(),
+        page.isLast()
+    );
+  }
+
+  private TransactionHistoryItemResponse toHistoryItem(WalletTransaction transaction) {
+    Long relatedWalletId = transaction.getRelatedWallet() == null ? null : transaction.getRelatedWallet().getId();
+    return new TransactionHistoryItemResponse(
+        transaction.getId(),
+        transaction.getWallet().getId(),
+        relatedWalletId,
+        transaction.getType(),
+        transaction.getAmount(),
+        transaction.getNote(),
+        transaction.getCreatedAt()
+    );
   }
 }
