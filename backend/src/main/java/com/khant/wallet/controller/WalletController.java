@@ -3,11 +3,15 @@ package com.khant.wallet.controller;
 import com.khant.wallet.domain.Wallet;
 import com.khant.wallet.dto.CreateWalletRequest;
 import com.khant.wallet.dto.MoneyRequest;
+import com.khant.wallet.dto.PageResponse;
+import com.khant.wallet.dto.TransactionHistoryItemResponse;
 import com.khant.wallet.dto.TransferRequest;
 import com.khant.wallet.dto.WalletResponse;
 import com.khant.wallet.service.WalletService;
 import jakarta.validation.Valid;
 import java.util.List;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -36,6 +40,16 @@ public class WalletController {
   public List<WalletResponse> listWallets(Authentication authentication) {
     Long userId = (Long) authentication.getPrincipal();
     return walletService.listWallets(userId).stream().map(this::map).toList();
+  }
+
+  @GetMapping("/{walletId}/transactions")
+  public PageResponse<TransactionHistoryItemResponse> getWalletTransactions(
+      Authentication authentication,
+      @PathVariable Long walletId,
+      @PageableDefault(size = 20) Pageable pageable
+  ) {
+    Long userId = (Long) authentication.getPrincipal();
+    return walletService.getTransactionHistory(userId, walletId, pageable);
   }
 
   @PostMapping("/{walletId}/deposit")
