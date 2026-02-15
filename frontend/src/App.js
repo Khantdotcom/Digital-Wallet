@@ -1,10 +1,11 @@
 import React, { useMemo, useState } from "https://esm.sh/react@18.3.1";
 
-const API_BASE = "http://localhost:8080";
+const DEFAULT_API_BASE = "http://localhost:8080";
 
 export function App() {
   const [token, setToken] = useState("");
   const [auth, setAuth] = useState(() => localStorage.getItem("wallet_token") ?? "");
+  const [apiBase, setApiBase] = useState(() => localStorage.getItem("wallet_api_base") ?? DEFAULT_API_BASE);
   const [walletId, setWalletId] = useState("");
   const [amount, setAmount] = useState("10");
   const [history, setHistory] = useState([]);
@@ -18,6 +19,13 @@ export function App() {
     [auth],
   );
 
+  function saveApiBase(value) {
+    const normalized = value.trim().replace(/\/$/, "") || DEFAULT_API_BASE;
+    localStorage.setItem("wallet_api_base", normalized);
+    setApiBase(normalized);
+    setStatus(`API base set to ${normalized}`);
+  }
+
   async function login(e) {
     e.preventDefault();
     setStatus("Logging in...");
@@ -25,7 +33,7 @@ export function App() {
     const email = e.target.email.value;
     const password = e.target.password.value;
 
-    const res = await fetch(`${API_BASE}/auth/login`, {
+    const res = await fetch(`${apiBase}/auth/login`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email, password }),
@@ -44,7 +52,7 @@ export function App() {
   }
 
   async function deposit() {
-    const res = await fetch(`${API_BASE}/wallets/${walletId}/deposit`, {
+    const res = await fetch(`${apiBase}/wallets/${walletId}/deposit`, {
       method: "POST",
       headers,
       body: JSON.stringify({ amount: Number(amount), note: "UI deposit" }),
@@ -53,7 +61,7 @@ export function App() {
   }
 
   async function loadHistory() {
-    const res = await fetch(`${API_BASE}/wallets/${walletId}/transactions?page=0&size=10&sort=createdAt,desc`, {
+    const res = await fetch(`${apiBase}/wallets/${walletId}/transactions?page=0&size=10&sort=createdAt,desc`, {
       headers,
     });
 
@@ -71,6 +79,17 @@ export function App() {
     "main",
     { className: "container" },
     React.createElement("h1", null, "Digital Wallet Demo"),
+    React.createElement(
+      "section",
+      { className: "card" },
+      React.createElement("h2", null, "API Configuration"),
+      React.createElement("input", {
+        value: apiBase,
+        onChange: (e) => setApiBase(e.target.value),
+        placeholder: "API Base URL (e.g., http://localhost:8080)",
+      }),
+      React.createElement("button", { onClick: () => saveApiBase(apiBase) }, "Save API Base"),
+    ),
     React.createElement(
       "form",
       { onSubmit: login, className: "card" },
