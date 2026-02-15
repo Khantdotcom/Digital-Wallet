@@ -9,6 +9,7 @@ A lightweight React client (no build step) that demonstrates:
 ## Prerequisites
 
 - Backend API running (default `http://localhost:8080`)
+- Backend API running on `http://localhost:8080`
 - A static file server for the `frontend/` folder
 
 ## Run (recommended)
@@ -62,3 +63,12 @@ When using `python3 -m http.server`, URLs like `/auth/login` and `/auth/register
 
 - Use the UI (Login form) for auth requests, or call backend directly at your API base (e.g. `http://localhost:8080/auth/login`) with `POST`.
 - We added redirect pages at `/auth/login` and `/auth/register` on the frontend server to route you back to `/` instead of showing a 404.
+## Run
+
+From repo root:
+
+```bash
+python -m http.server 4173 -d frontend
+```
+
+Then open `http://localhost:4173`.

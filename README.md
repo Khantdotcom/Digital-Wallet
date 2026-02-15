@@ -36,3 +36,4 @@ Open `http://localhost:4173`
 - If Maven cannot download dependencies, verify network/proxy and Maven Central access.
 - If you run backend on another port (e.g. 8081), set the frontend API Base URL in the UI before login.
 - If you open `http://localhost:4173/auth/login` or `/auth/register` in browser, that hits the static frontend server. Use frontend UI or call backend API base URL for auth endpoints.
+
