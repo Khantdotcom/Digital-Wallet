@@ -1,0 +1,40 @@
+body {
+  font-family: Arial, sans-serif;
+  margin: 0;
+  background: #f5f7fb;
+}
+
+.container {
+  max-width: 720px;
+  margin: 32px auto;
+  padding: 0 16px;
+}
+
+.card {
+  background: white;
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 16px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+  display: grid;
+  gap: 10px;
+}
+
+input,
+button {
+  font-size: 14px;
+  padding: 10px;
+}
+
+.actions {
+  display: flex;
+  gap: 10px;
+}
+
+.status {
+  font-weight: bold;
+}
+
+.token {
+  color: #6366f1;
+}
