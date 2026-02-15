@@ -1,5 +1,7 @@
 # Digital Wallet
 
+<img width="574" height="897" alt="DigitalWallet" src="https://github.com/user-attachments/assets/22e903ce-0f0a-475b-8e02-c71f9f728280" />
+
 ## Quick Start
 
 ### 1) Start PostgreSQL
