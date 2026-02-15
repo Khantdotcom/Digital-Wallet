@@ -16,6 +16,8 @@ export function App({ initialAuthView = "login" }) {
   const [transferTargetId, setTransferTargetId] = useState("");
   const [history, setHistory] = useState([]);
   const [status, setStatus] = useState("Ready");
+  const [activePage, setActivePage] = useState(() => window.location.hash.replace("#banking-", "") || "overview");
+  const [isSubmittingAuth, setIsSubmittingAuth] = useState(false);
 
   const headers = useMemo(
     () => ({
@@ -40,6 +42,48 @@ export function App({ initialAuthView = "login" }) {
     window.history.replaceState({}, "", "/auth/login/");
   }
 
+  function switchBankingPage(nextPage) {
+    setActivePage(nextPage);
+    window.location.hash = `banking-${nextPage}`;
+  }
+
+  async function requestJson(url, options = {}, fallbackMessage = "Request failed") {
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 12000);
+
+    try {
+      const res = await fetch(url, { ...options, signal: controller.signal });
+      const text = await res.text();
+      let data = null;
+      if (text) {
+        try {
+          data = JSON.parse(text);
+        } catch {
+          if (res.ok) {
+            throw new Error("Received an invalid API response. Please check backend logs.");
+          }
+        }
+      }
+
+      if (!res.ok) {
+        const message = data?.message || data?.error || fallbackMessage;
+        throw new Error(message);
+      }
+
+      return data;
+    } catch (error) {
+      if (error.name === "AbortError") {
+        throw new Error("Request timed out. Check API base URL and backend status.");
+      }
+      if (error.name === "TypeError") {
+        throw new Error(`Unable to reach API at ${apiBase}. Check API Base URL, backend status, and CORS settings.`);
+      }
+      throw error;
+    } finally {
+      window.clearTimeout(timeout);
+    }
+  }
+
   function saveApiBase() {
     const normalized = apiBaseInput.trim().replace(/\/$/, "") || DEFAULT_API_BASE;
     localStorage.setItem("wallet_api_base", normalized);
@@ -50,50 +94,60 @@ export function App({ initialAuthView = "login" }) {
 
   async function submitAuth(e, mode) {
     e.preventDefault();
+    if (isSubmittingAuth) {
+      return;
+    }
+
+    setIsSubmittingAuth(true);
     setStatus(mode === "login" ? "Logging in..." : "Registering...");
 
     const email = e.target.email.value;
     const password = e.target.password.value;
 
-    const res = await fetch(`${apiBase}/auth/${mode}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password }),
-    });
+    try {
+      const data = await requestJson(
+        `${apiBase}/auth/${mode}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email, password }),
+        },
+        `${mode === "login" ? "Login" : "Registration"} failed`,
+      );
 
-    if (!res.ok) {
-      setStatus(`${mode === "login" ? "Login" : "Registration"} failed`);
-      return;
+      localStorage.setItem("wallet_token", data.accessToken);
+      localStorage.setItem("wallet_user_email", data.email ?? email);
+      setAuth(data.accessToken);
+      setTokenPreview(data.accessToken);
+      setUserEmail(data.email ?? email);
+      setStatus(mode === "login" ? "Logged in" : "Registered and logged in");
+      window.history.replaceState({}, "", "/");
+      await loadWallets(data.accessToken);
+    } catch (error) {
+      setStatus(error.message || `${mode === "login" ? "Login" : "Registration"} failed`);
+    } finally {
+      setIsSubmittingAuth(false);
     }
-
-    const data = await res.json();
-    localStorage.setItem("wallet_token", data.accessToken);
-    localStorage.setItem("wallet_user_email", data.email ?? email);
-    setAuth(data.accessToken);
-    setTokenPreview(data.accessToken);
-    setUserEmail(data.email ?? email);
-    setStatus(mode === "login" ? "Logged in" : "Registered and logged in");
-    window.history.replaceState({}, "", "/");
-    await loadWallets(data.accessToken);
   }
 
   async function loadWallets(overrideToken = "") {
     const tokenToUse = overrideToken || auth;
-    const res = await fetch(`${apiBase}/wallets`, {
-      headers: {
-        "Content-Type": "application/json",
-        ...(tokenToUse ? { Authorization: `Bearer ${tokenToUse}` } : {}),
-      },
-    });
-
-    if (!res.ok) {
-      setStatus("Failed to load wallets");
-      return;
+    try {
+      const data = await requestJson(
+        `${apiBase}/wallets`,
+        {
+          headers: {
+            "Content-Type": "application/json",
+            ...(tokenToUse ? { Authorization: `Bearer ${tokenToUse}` } : {}),
+          },
+        },
+        "Failed to load wallets",
+      );
+      setWallets(data ?? []);
+      setStatus("Wallets refreshed");
+    } catch (error) {
+      setStatus(error.message || "Failed to load wallets");
     }
-
-    const data = await res.json();
-    setWallets(data);
-    setStatus("Wallets refreshed");
   }
 
   async function createWallet() {
@@ -102,20 +156,23 @@ export function App({ initialAuthView = "login" }) {
       return;
     }
 
-    const res = await fetch(`${apiBase}/wallets`, {
-      method: "POST",
-      headers,
-      body: JSON.stringify({ name: walletName.trim() }),
-    });
+    try {
+      await requestJson(
+        `${apiBase}/wallets`,
+        {
+          method: "POST",
+          headers,
+          body: JSON.stringify({ name: walletName.trim() }),
+        },
+        "Create wallet failed",
+      );
 
-    if (!res.ok) {
-      setStatus("Create wallet failed");
-      return;
+      setWalletName("");
+      setStatus("Wallet created");
+      await loadWallets();
+    } catch (error) {
+      setStatus(error.message || "Create wallet failed");
     }
-
-    setWalletName("");
-    setStatus("Wallet created");
-    await loadWallets();
   }
 
   async function moneyAction(type) {
@@ -124,20 +181,23 @@ export function App({ initialAuthView = "login" }) {
       return;
     }
 
-    const res = await fetch(`${apiBase}/wallets/${selectedWalletId}/${type}`, {
-      method: "POST",
-      headers,
-      body: JSON.stringify({ amount: Number(amount), note: `UI ${type}` }),
-    });
+    try {
+      await requestJson(
+        `${apiBase}/wallets/${selectedWalletId}/${type}`,
+        {
+          method: "POST",
+          headers,
+          body: JSON.stringify({ amount: Number(amount), note: `UI ${type}` }),
+        },
+        `${type} failed`,
+      );
 
-    if (!res.ok) {
-      setStatus(`${type} failed`);
-      return;
+      setStatus(`${type} success`);
+      await loadWallets();
+      await loadHistory();
+    } catch (error) {
+      setStatus(error.message || `${type} failed`);
     }
-
-    setStatus(`${type} success`);
-    await loadWallets();
-    await loadHistory();
   }
 
   async function transfer() {
@@ -146,25 +206,28 @@ export function App({ initialAuthView = "login" }) {
       return;
     }
 
-    const res = await fetch(`${apiBase}/wallets/transfer`, {
-      method: "POST",
-      headers,
-      body: JSON.stringify({
-        sourceWalletId: Number(selectedWalletId),
-        targetWalletId: Number(transferTargetId),
-        amount: Number(amount),
-        note: "UI transfer",
-      }),
-    });
+    try {
+      await requestJson(
+        `${apiBase}/wallets/transfer`,
+        {
+          method: "POST",
+          headers,
+          body: JSON.stringify({
+            sourceWalletId: Number(selectedWalletId),
+            targetWalletId: Number(transferTargetId),
+            amount: Number(amount),
+            note: "UI transfer",
+          }),
+        },
+        "Transfer failed",
+      );
 
-    if (!res.ok) {
-      setStatus("Transfer failed");
-      return;
+      setStatus("Transfer success");
+      await loadWallets();
+      await loadHistory();
+    } catch (error) {
+      setStatus(error.message || "Transfer failed");
     }
-
-    setStatus("Transfer success");
-    await loadWallets();
-    await loadHistory();
   }
 
   async function loadHistory() {
@@ -173,18 +236,17 @@ export function App({ initialAuthView = "login" }) {
       return;
     }
 
-    const res = await fetch(`${apiBase}/wallets/${selectedWalletId}/transactions?page=0&size=10&sort=createdAt,desc`, {
-      headers,
-    });
-
-    if (!res.ok) {
-      setStatus("Failed to load transactions");
-      return;
+    try {
+      const data = await requestJson(
+        `${apiBase}/wallets/${selectedWalletId}/transactions?page=0&size=10&sort=createdAt,desc`,
+        { headers },
+        "Failed to load transactions",
+      );
+      setHistory(data?.content ?? []);
+      setStatus("Transaction history updated");
+    } catch (error) {
+      setStatus(error.message || "Failed to load transactions");
     }
-
-    const data = await res.json();
-    setHistory(data.content ?? []);
-    setStatus("Transaction history updated");
   }
 
   function logout() {
@@ -196,11 +258,18 @@ export function App({ initialAuthView = "login" }) {
     setWallets([]);
     setHistory([]);
     setSelectedWalletId("");
+    setActivePage("overview");
     setStatus("Logged out");
     switchAuthView("login");
   }
 
   const selectedWallet = wallets.find((wallet) => String(wallet.id) === String(selectedWalletId));
+  const bankingPages = [
+    { id: "overview", label: "Overview" },
+    { id: "wallets", label: "Wallets" },
+    { id: "transfer", label: "Transfers" },
+    { id: "history", label: "History" },
+  ];
 
   return React.createElement(
     "main",
@@ -247,7 +316,11 @@ export function App({ initialAuthView = "login" }) {
           React.createElement("h2", null, authView === "login" ? "Welcome back" : "Create account"),
           React.createElement("input", { name: "email", type: "email", placeholder: "Email", required: true }),
           React.createElement("input", { name: "password", type: "password", placeholder: "Password", required: true }),
-          React.createElement("button", { type: "submit" }, authView === "login" ? "Login" : "Register"),
+          React.createElement(
+            "button",
+            { type: "submit", disabled: isSubmittingAuth },
+            isSubmittingAuth ? "Please wait..." : authView === "login" ? "Login" : "Register",
+          ),
         ),
       ),
     auth &&
@@ -257,98 +330,121 @@ export function App({ initialAuthView = "login" }) {
         React.createElement(
           "section",
           { className: "card" },
-          React.createElement("h2", null, "Wallet State"),
-          React.createElement("p", null, `Signed in as ${userEmail || "current user"}`),
+          React.createElement("h2", null, "Banking Pages"),
           React.createElement(
             "div",
-            { className: "actions" },
-            React.createElement("button", { onClick: loadWallets }, "Refresh Wallets"),
-            React.createElement("button", { onClick: logout, className: "secondary" }, "Logout"),
-          ),
-          selectedWallet
-            ? React.createElement("p", { className: "balance-highlight" }, `Selected balance: ${selectedWallet.balance}`)
-            : React.createElement("p", { className: "muted" }, "No wallet selected yet."),
-          React.createElement(
-            "div",
-            { className: "wallet-list" },
-            wallets.map((wallet) =>
+            { className: "tabs" },
+            bankingPages.map((page) =>
               React.createElement(
                 "button",
                 {
-                  key: wallet.id,
-                  className: String(wallet.id) === String(selectedWalletId) ? "wallet-item active" : "wallet-item",
-                  onClick: () => setSelectedWalletId(String(wallet.id)),
+                  key: page.id,
+                  className: activePage === page.id ? "tab active" : "tab",
+                  onClick: () => switchBankingPage(page.id),
                 },
-                `${wallet.name} (#${wallet.id}) — ${wallet.balance}`,
+                page.label,
               ),
             ),
           ),
         ),
-        React.createElement(
-          "section",
-          { className: "card" },
-          React.createElement("h2", null, "Wallet Actions"),
+        (activePage === "overview" || activePage === "wallets") &&
           React.createElement(
-            "div",
-            { className: "split" },
-            React.createElement("input", {
-              value: walletName,
-              onChange: (e) => setWalletName(e.target.value),
-              placeholder: "New wallet name",
-            }),
-            React.createElement("button", { onClick: createWallet }, "Create Wallet"),
-          ),
-          React.createElement(
-            "div",
-            { className: "split" },
-            React.createElement("input", {
-              value: amount,
-              onChange: (e) => setAmount(e.target.value),
-              type: "number",
-              min: "0.01",
-              step: "0.01",
-              placeholder: "Amount",
-            }),
+            "section",
+            { className: "card" },
+            React.createElement("h2", null, "Wallet State"),
+            React.createElement("p", null, `Signed in as ${userEmail || "current user"}`),
             React.createElement(
               "div",
               { className: "actions" },
-              React.createElement("button", { onClick: () => moneyAction("deposit"), disabled: !selectedWalletId }, "Deposit"),
-              React.createElement("button", { onClick: () => moneyAction("withdraw"), disabled: !selectedWalletId }, "Withdraw"),
+              React.createElement("button", { onClick: loadWallets }, "Refresh Wallets"),
+              React.createElement("button", { onClick: logout, className: "secondary" }, "Logout"),
             ),
-          ),
-          React.createElement(
-            "div",
-            { className: "split" },
-            React.createElement("input", {
-              value: transferTargetId,
-              onChange: (e) => setTransferTargetId(e.target.value),
-              placeholder: "Target wallet ID",
-              type: "number",
-            }),
+            selectedWallet
+              ? React.createElement("p", { className: "balance-highlight" }, `Selected balance: ${selectedWallet.balance}`)
+              : React.createElement("p", { className: "muted" }, "No wallet selected yet."),
             React.createElement(
               "div",
-              { className: "actions" },
-              React.createElement("button", { onClick: transfer, disabled: !selectedWalletId }, "Transfer"),
-              React.createElement("button", { onClick: loadHistory, disabled: !selectedWalletId }, "Load History"),
+              { className: "wallet-list" },
+              wallets.map((wallet) =>
+                React.createElement(
+                  "button",
+                  {
+                    key: wallet.id,
+                    className: String(wallet.id) === String(selectedWalletId) ? "wallet-item active" : "wallet-item",
+                    onClick: () => setSelectedWalletId(String(wallet.id)),
+                  },
+                  `${wallet.name} (#${wallet.id}) — ${wallet.balance}`,
+                ),
+              ),
             ),
           ),
-        ),
-        React.createElement(
-          "section",
-          { className: "card" },
-          React.createElement("h2", null, "Recent Transactions"),
+        (activePage === "overview" || activePage === "wallets" || activePage === "transfer") &&
           React.createElement(
-            "ul",
-            { className: "tx-list" },
-            history.map((tx) =>
+            "section",
+            { className: "card" },
+            React.createElement("h2", null, "Wallet Actions"),
+            React.createElement(
+              "div",
+              { className: "split" },
+              React.createElement("input", {
+                value: walletName,
+                onChange: (e) => setWalletName(e.target.value),
+                placeholder: "New wallet name",
+              }),
+              React.createElement("button", { onClick: createWallet }, "Create Wallet"),
+            ),
+            React.createElement(
+              "div",
+              { className: "split" },
+              React.createElement("input", {
+                value: amount,
+                onChange: (e) => setAmount(e.target.value),
+                type: "number",
+                min: "0.01",
+                step: "0.01",
+                placeholder: "Amount",
+              }),
               React.createElement(
-                "li",
-                { key: tx.id },
-                `${tx.type}: ${tx.amount} (${new Date(tx.createdAt).toLocaleString()})`,
+                "div",
+                { className: "actions" },
+                React.createElement("button", { onClick: () => moneyAction("deposit"), disabled: !selectedWalletId }, "Deposit"),
+                React.createElement("button", { onClick: () => moneyAction("withdraw"), disabled: !selectedWalletId }, "Withdraw"),
+              ),
+            ),
+            React.createElement(
+              "div",
+              { className: "split" },
+              React.createElement("input", {
+                value: transferTargetId,
+                onChange: (e) => setTransferTargetId(e.target.value),
+                placeholder: "Target wallet ID",
+                type: "number",
+              }),
+              React.createElement(
+                "div",
+                { className: "actions" },
+                React.createElement("button", { onClick: transfer, disabled: !selectedWalletId }, "Transfer"),
+                React.createElement("button", { onClick: loadHistory, disabled: !selectedWalletId }, "Load History"),
               ),
             ),
           ),
-        ),
+        (activePage === "overview" || activePage === "history") &&
+          React.createElement(
+            "section",
+            { className: "card" },
+            React.createElement("h2", null, "Recent Transactions"),
+            React.createElement(
+              "ul",
+              { className: "tx-list" },
+              history.map((tx) =>
+                React.createElement(
+                  "li",
+                  { key: tx.id },
+                  `${tx.type}: ${tx.amount} (${new Date(tx.createdAt).toLocaleString()})`,
+                ),
+              ),
+            ),
+          ),
       ),
     React.createElement("p", { className: "status" }, status),
     tokenPreview && React.createElement("p", { className: "token" }, `Token: ${tokenPreview.slice(0, 25)}...`),
