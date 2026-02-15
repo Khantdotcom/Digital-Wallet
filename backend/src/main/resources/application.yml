@@ -17,3 +17,7 @@ app:
   jwt:
     secret: replace-this-with-a-secure-32-byte-minimum-secret-key
     expiration-seconds: 3600
+  cors:
+    allowed-origin-patterns:
+      - http://localhost:*
+      - http://127.0.0.1:*
