@@ -14,5 +14,5 @@ EXPOSE 8080
 # Free/Hobby boxes are small; keep heap modest unless JAVA_OPTS overrides it.
 ENV JAVA_OPTS="-XX:MaxRAMPercentage=60.0 -XX:+UseContainerSupport"
 HEALTHCHECK --interval=10s --timeout=5s --start-period=60s --retries=12 \
-  CMD curl -sf http://localhost:${PORT:-8080}/health || exit 1
+  CMD curl -sf http://localhost:8080/health || exit 1
 ENTRYPOINT ["sh", "-c", "java $JAVA_OPTS -jar app.jar"]
