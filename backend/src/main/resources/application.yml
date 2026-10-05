@@ -1,11 +1,11 @@
 server:
-  port: 8080
+  port: ${SERVER_PORT:8080}
 
 spring:
   datasource:
-    url: jdbc:postgresql://localhost:5433/walletdb
-    username: wallet
-    password: wallet
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5433/walletdb}
+    username: ${SPRING_DATASOURCE_USERNAME:wallet}
+    password: ${SPRING_DATASOURCE_PASSWORD:wallet}
   jpa:
     hibernate:
       ddl-auto: validate
@@ -15,9 +15,7 @@ spring:
 
 app:
   jwt:
-    secret: replace-this-with-a-secure-32-byte-minimum-secret-key
-    expiration-seconds: 3600
+    secret: ${APP_JWT_SECRET:replace-this-with-a-secure-32-byte-minimum-secret-key}
+    expiration-seconds: ${APP_JWT_EXPIRATION_SECONDS:3600}
   cors:
-    allowed-origin-patterns:
-      - http://localhost:*
-      - http://127.0.0.1:*
+    allowed-origin-patterns: ${APP_CORS_ALLOWED_ORIGIN_PATTERNS:http://localhost:*,http://127.0.0.1:*}
