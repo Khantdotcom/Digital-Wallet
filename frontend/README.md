@@ -11,7 +11,19 @@ A lightweight React client (no build step) that demonstrates:
 - Backend API running (default `http://localhost:8080`)
 - A static file server for the `frontend/` folder
 
-## Run
+## Deploy (Vercel Hobby)
+
+The demo UI is static files (no bundler). From the Vercel dashboard:
+
+1. Import the repo and set **Root Directory** to `frontend`.
+2. Leave the build command empty; deploy as static.
+3. Point **API Base URL** in the UI at your hosted Spring Boot API (Vercel does **not** run the Java backend).
+
+Optional: set `window.__WALLET_API_BASE__` in `config.js` before deploy.
+
+See project store `docs/phase-01-deployment.md` for the full Vercel + API split.
+
+## Run locally
 
 From the project root (`Digital-Wallet`):
 
