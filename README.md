@@ -43,13 +43,26 @@ graph LR
 
 ## Quick Start
 
-### 1) Start PostgreSQL
+### Deploy Phase 01 with Docker Compose (recommended)
+
+```bash
+git checkout cursor/phase-01-money-correctness-e892
+cp .env.example .env   # edit APP_JWT_SECRET / POSTGRES_PASSWORD for shared envs
+docker compose up --build -d
+./scripts/smoke-test.sh
+```
+
+- API: `http://localhost:8080` (`/health`, `/ready`)
+- Frontend demo: `http://localhost:4173`
+- Postgres host port: `5433`
+
+Full steps, env vars, tear-down, and limitations: project store doc `docs/phase-01-deployment.md` (also summarized in PR #18).
+
+### Alternative: start PostgreSQL only, run API with Maven
 
 ```bash
 docker compose up -d db
 ```
-
-### 2) Start backend
 
 ```bash
 cd backend
@@ -60,7 +73,7 @@ mvn spring-boot:run
 
 Backend API: `http://localhost:8080`
 
-### 3) Start frontend demo
+### Start frontend demo (without Compose frontend service)
 
 In a new terminal from repo root:
 
@@ -85,3 +98,8 @@ Open `http://localhost:4173`
 - **Protected path**: all wallet operations (`create/list/deposit/withdraw/transfer/history`) require JWT, are handled by `WalletController`, and execute transactional logic in `WalletService`.
 - **Risk scoring**: each money movement is assessed by `RiskService` using pluggable `RiskRule` components and persisted as `risk_events`.
 - **Persistence**: all repositories store domain data in PostgreSQL, with schema managed by Flyway migrations.
+
+## Money correctness (Phase 01)
+
+Wallets keep a cached `balance`, but completed money movements also write immutable double-entry `ledger_entries` (debits always equal credits). User-facing `transactions` move through `PENDING → COMPLETED|FAILED`. Amounts are integer **minor units** (`BIGINT` / `long` cents) — never floating point and no longer DECIMAL/`BigDecimal` on the ledger path. API `amount` / `balance` fields are cents. Database checks reject negative balances and non-positive amounts; terminal rows cannot be rewritten (compensate with a new opposite movement instead). Reconciliation stays service/test-only for now (no admin HTTP endpoint yet).
+

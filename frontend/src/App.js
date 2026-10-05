@@ -12,7 +12,7 @@ export function App({ initialAuthView = "login" }) {
   const [wallets, setWallets] = useState([]);
   const [selectedWalletId, setSelectedWalletId] = useState("");
   const [walletName, setWalletName] = useState("");
-  const [amount, setAmount] = useState("10");
+  const [amount, setAmount] = useState("1000");
   const [transferTargetId, setTransferTargetId] = useState("");
   const [history, setHistory] = useState([]);
   const [status, setStatus] = useState("Ready");
@@ -187,7 +187,7 @@ export function App({ initialAuthView = "login" }) {
         {
           method: "POST",
           headers,
-          body: JSON.stringify({ amount: Number(amount), note: `UI ${type}` }),
+          body: JSON.stringify({ amount: Number.parseInt(amount, 10), note: `UI ${type}` }),
         },
         `${type} failed`,
       );
@@ -215,7 +215,7 @@ export function App({ initialAuthView = "login" }) {
           body: JSON.stringify({
             sourceWalletId: Number(selectedWalletId),
             targetWalletId: Number(transferTargetId),
-            amount: Number(amount),
+            amount: Number.parseInt(amount, 10),
             note: "UI transfer",
           }),
         },
@@ -360,7 +360,7 @@ export function App({ initialAuthView = "login" }) {
               React.createElement("button", { onClick: logout, className: "secondary" }, "Logout"),
             ),
             selectedWallet
-              ? React.createElement("p", { className: "balance-highlight" }, `Selected balance: ${selectedWallet.balance}`)
+              ? React.createElement("p", { className: "balance-highlight" }, `Selected balance: ${selectedWallet.balance} minor units (cents)`)
               : React.createElement("p", { className: "muted" }, "No wallet selected yet."),
             React.createElement(
               "div",
@@ -373,7 +373,7 @@ export function App({ initialAuthView = "login" }) {
                     className: String(wallet.id) === String(selectedWalletId) ? "wallet-item active" : "wallet-item",
                     onClick: () => setSelectedWalletId(String(wallet.id)),
                   },
-                  `${wallet.name} (#${wallet.id}) — ${wallet.balance}`,
+                  `${wallet.name} (#${wallet.id}) — ${wallet.balance}¢`,
                 ),
               ),
             ),
@@ -400,9 +400,9 @@ export function App({ initialAuthView = "login" }) {
                 value: amount,
                 onChange: (e) => setAmount(e.target.value),
                 type: "number",
-                min: "0.01",
-                step: "0.01",
-                placeholder: "Amount",
+                min: "1",
+                step: "1",
+                placeholder: "Amount (cents / minor units)",
               }),
               React.createElement(
                 "div",
@@ -440,7 +440,7 @@ export function App({ initialAuthView = "login" }) {
                 React.createElement(
                   "li",
                   { key: tx.id },
-                  `${tx.type}: ${tx.amount} (${new Date(tx.createdAt).toLocaleString()})`,
+                  `${tx.type}: ${tx.amount}¢ (${new Date(tx.createdAt).toLocaleString()})`,
                 ),
               ),
             ),

@@ -10,7 +10,6 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
-import java.math.BigDecimal;
 import java.time.Instant;
 
 @Entity
@@ -28,8 +27,9 @@ public class Wallet {
   @Column(nullable = false, length = 120)
   private String name;
 
-  @Column(nullable = false, precision = 19, scale = 2)
-  private BigDecimal balance = BigDecimal.ZERO;
+  /** Cached balance in integer minor units (cents). */
+  @Column(nullable = false)
+  private long balance = 0L;
 
   @Column(name = "created_at", nullable = false)
   private Instant createdAt = Instant.now();
@@ -54,7 +54,7 @@ public class Wallet {
     return name;
   }
 
-  public BigDecimal getBalance() {
+  public long getBalance() {
     return balance;
   }
 
@@ -74,7 +74,7 @@ public class Wallet {
     this.name = name;
   }
 
-  public void setBalance(BigDecimal balance) {
+  public void setBalance(long balance) {
     this.balance = balance;
   }
 }

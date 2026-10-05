@@ -15,8 +15,12 @@ public class CorsConfig {
 
   public CorsConfig(
       @Value("${app.cors.allowed-origin-patterns:http://localhost:*,http://127.0.0.1:*}")
-      List<String> allowedOriginPatterns) {
-    this.allowedOriginPatterns = allowedOriginPatterns;
+      String allowedOriginPatterns) {
+    this.allowedOriginPatterns =
+        java.util.Arrays.stream(allowedOriginPatterns.split(","))
+            .map(String::trim)
+            .filter(pattern -> !pattern.isEmpty())
+            .toList();
   }
 
   @Bean

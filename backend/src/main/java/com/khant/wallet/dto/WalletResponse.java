@@ -1,10 +1,9 @@
 package com.khant.wallet.dto;
 
-import java.math.BigDecimal;
-
+/** Wallet view. {@code balance} is integer minor units (cents). */
 public record WalletResponse(
     Long id,
     String name,
-    BigDecimal balance
+    long balance
 ) {
 }
