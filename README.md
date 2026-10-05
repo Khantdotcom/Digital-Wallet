@@ -56,7 +56,7 @@ docker compose up --build -d
 - Frontend demo: `http://localhost:4173`
 - Postgres host port: `5433`
 
-Full steps, env vars, tear-down, Railway free/trial notes, and limitations: project store doc `docs/phase-01-deployment.md` (also summarized in PR #18).
+Full steps, env vars, tear-down, and limitations: project store doc `docs/phase-01-deployment.md`. Railway free/trial path: `docs/phase-01-railway-deploy.md` (also summarized in PR #18).
 
 ### Alternative: start PostgreSQL only, run API with Maven
 
