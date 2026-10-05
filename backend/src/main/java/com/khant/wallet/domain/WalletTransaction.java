@@ -12,7 +12,6 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
-import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
 
@@ -36,8 +35,9 @@ public class WalletTransaction {
   @Column(nullable = false, length = 20)
   private TransactionType type;
 
-  @Column(nullable = false, precision = 19, scale = 2)
-  private BigDecimal amount;
+  /** Amount in integer minor units (cents). */
+  @Column(nullable = false)
+  private long amount;
 
   @Enumerated(EnumType.STRING)
   @Column(nullable = false, length = 20)
@@ -85,7 +85,7 @@ public class WalletTransaction {
     return type;
   }
 
-  public BigDecimal getAmount() {
+  public long getAmount() {
     return amount;
   }
 
@@ -133,7 +133,7 @@ public class WalletTransaction {
     this.type = type;
   }
 
-  public void setAmount(BigDecimal amount) {
+  public void setAmount(long amount) {
     this.amount = amount;
   }
 

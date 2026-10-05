@@ -2,15 +2,17 @@ package com.khant.wallet.wallet.ledger;
 
 import com.khant.wallet.domain.Wallet;
 import com.khant.wallet.repository.WalletRepository;
-import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Proves money conservation: global debits == credits, and each wallet balance
- * matches the signed sum of its completed WALLET ledger legs.
+ * Proves money conservation in minor units: global debits == credits, and each
+ * wallet balance matches the signed sum of its completed WALLET ledger legs.
+ *
+ * <p>Service / test-only for Phase 01 — no admin HTTP reconciliation endpoint yet
+ * (deferred by product decision; add later when an operator UI needs it).
  */
 @Service
 public class LedgerReconciliationService {
@@ -28,14 +30,14 @@ public class LedgerReconciliationService {
 
   @Transactional(readOnly = true)
   public ReconciliationReport reconcile() {
-    BigDecimal totalDebits = nullToZero(ledgerEntryRepository.sumCompletedDebits());
-    BigDecimal totalCredits = nullToZero(ledgerEntryRepository.sumCompletedCredits());
-    boolean globallyBalanced = totalDebits.compareTo(totalCredits) == 0;
+    long totalDebits = nullToZero(ledgerEntryRepository.sumCompletedDebits());
+    long totalCredits = nullToZero(ledgerEntryRepository.sumCompletedCredits());
+    boolean globallyBalanced = totalDebits == totalCredits;
 
     List<WalletBalanceMismatch> mismatches = new ArrayList<>();
     for (Wallet wallet : walletRepository.findAll()) {
-      BigDecimal ledgerBalance = nullToZero(ledgerEntryRepository.sumCompletedWalletSignedAmount(wallet.getId()));
-      if (wallet.getBalance().compareTo(ledgerBalance) != 0) {
+      long ledgerBalance = nullToZero(ledgerEntryRepository.sumCompletedWalletSignedAmount(wallet.getId()));
+      if (wallet.getBalance() != ledgerBalance) {
         mismatches.add(new WalletBalanceMismatch(wallet.getId(), wallet.getBalance(), ledgerBalance));
       }
     }
@@ -43,16 +45,16 @@ public class LedgerReconciliationService {
     return new ReconciliationReport(totalDebits, totalCredits, globallyBalanced, List.copyOf(mismatches));
   }
 
-  private static BigDecimal nullToZero(BigDecimal value) {
-    return value == null ? BigDecimal.ZERO.setScale(2) : value;
+  private static long nullToZero(Long value) {
+    return value == null ? 0L : value;
   }
 
-  public record WalletBalanceMismatch(Long walletId, BigDecimal walletBalance, BigDecimal ledgerBalance) {
+  public record WalletBalanceMismatch(Long walletId, long walletBalance, long ledgerBalance) {
   }
 
   public record ReconciliationReport(
-      BigDecimal totalDebits,
-      BigDecimal totalCredits,
+      long totalDebits,
+      long totalCredits,
       boolean globallyBalanced,
       List<WalletBalanceMismatch> walletMismatches
   ) {

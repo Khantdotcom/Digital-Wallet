@@ -2,7 +2,6 @@ package com.khant.wallet.risk;
 
 import com.khant.wallet.domain.RiskEvent;
 import com.khant.wallet.repository.RiskEventRepository;
-import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
 import org.springframework.stereotype.Service;
@@ -18,8 +17,8 @@ public class RiskService {
     this.riskEventRepository = riskEventRepository;
   }
 
-  public RiskAssessment assessAndRecord(Long userId, Long walletId, WalletOperation operation, BigDecimal amount) {
-    RiskContext context = new RiskContext(userId, walletId, operation, amount);
+  public RiskAssessment assessAndRecord(Long userId, Long walletId, WalletOperation operation, long amountMinorUnits) {
+    RiskContext context = new RiskContext(userId, walletId, operation, amountMinorUnits);
 
     int totalScore = 0;
     List<String> reasons = new ArrayList<>();

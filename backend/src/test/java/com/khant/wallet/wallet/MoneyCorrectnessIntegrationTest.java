@@ -21,7 +21,6 @@ import com.khant.wallet.wallet.ledger.LedgerDirection;
 import com.khant.wallet.wallet.ledger.LedgerEntry;
 import com.khant.wallet.wallet.ledger.LedgerEntryRepository;
 import com.khant.wallet.wallet.ledger.LedgerReconciliationService;
-import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -34,7 +33,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.ActiveProfiles;
 
 /**
- * Phase 01 exit proofs against real PostgreSQL + Flyway schema.
+ * Phase 01 exit proofs against real PostgreSQL + Flyway schema (integer minor units).
  */
 @SpringBootTest
 @ActiveProfiles("test")
@@ -83,47 +82,49 @@ class MoneyCorrectnessIntegrationTest {
 
   @Test
   void completedMovements_shouldKeepGlobalDebitsEqualToCredits() {
-    walletService.deposit(userId, travel.getId(), new MoneyRequest(new BigDecimal("100.00"), "top-up"));
-    walletService.withdraw(userId, travel.getId(), new MoneyRequest(new BigDecimal("25.50"), "taxi"));
+    // 100.00 + 25.50 + 40.00 major → cents
+    walletService.deposit(userId, travel.getId(), new MoneyRequest(10_000L, "top-up"));
+    walletService.withdraw(userId, travel.getId(), new MoneyRequest(2_550L, "taxi"));
     walletService.transfer(
         userId,
-        new TransferRequest(travel.getId(), savings.getId(), new BigDecimal("40.00"), "split")
+        new TransferRequest(travel.getId(), savings.getId(), 4_000L, "split")
     );
 
     LedgerReconciliationService.ReconciliationReport report = reconciliationService.reconcile();
 
-    assertThat(report.totalDebits()).isEqualByComparingTo(report.totalCredits());
+    assertThat(report.totalDebits()).isEqualTo(report.totalCredits());
     assertThat(report.isFullyReconciled()).isTrue();
-    assertThat(report.totalDebits()).isEqualByComparingTo("165.50");
+    // deposit 10000 + withdraw 2550 + transfer 4000 = 16550 cents of debit (and credit)
+    assertThat(report.totalDebits()).isEqualTo(16_550L);
   }
 
   @Test
   void walletBalances_shouldNeverGoNegative_andMatchLedger() {
-    walletService.deposit(userId, travel.getId(), new MoneyRequest(new BigDecimal("50.00"), "load"));
+    walletService.deposit(userId, travel.getId(), new MoneyRequest(5_000L, "load"));
 
     assertThatThrownBy(() ->
-        walletService.withdraw(userId, travel.getId(), new MoneyRequest(new BigDecimal("50.01"), "overdraw"))
+        walletService.withdraw(userId, travel.getId(), new MoneyRequest(5_001L, "overdraw"))
     ).isInstanceOf(InsufficientFundsException.class);
 
     Wallet refreshed = walletRepository.findById(travel.getId()).orElseThrow();
-    assertThat(refreshed.getBalance()).isEqualByComparingTo("50.00");
-    assertThat(refreshed.getBalance().compareTo(BigDecimal.ZERO)).isGreaterThanOrEqualTo(0);
+    assertThat(refreshed.getBalance()).isEqualTo(5_000L);
+    assertThat(refreshed.getBalance()).isGreaterThanOrEqualTo(0L);
 
     assertThat(reconciliationService.reconcile().isFullyReconciled()).isTrue();
   }
 
   @Test
   void completedMovements_mustLeaveDurableLedgerRows_andNoLostTransactions() {
-    walletService.deposit(userId, travel.getId(), new MoneyRequest(new BigDecimal("80.00"), "load"));
+    walletService.deposit(userId, travel.getId(), new MoneyRequest(8_000L, "load"));
     walletService.transfer(
         userId,
-        new TransferRequest(travel.getId(), savings.getId(), new BigDecimal("30.00"), "move")
+        new TransferRequest(travel.getId(), savings.getId(), 3_000L, "move")
     );
 
     List<WalletTransaction> completed = walletTransactionRepository.findAll().stream()
         .filter(tx -> tx.getStatus() == TransactionStatus.COMPLETED)
         .toList();
-    assertThat(completed).hasSize(3); // deposit + transfer out + transfer in
+    assertThat(completed).hasSize(3);
 
     for (WalletTransaction tx : completed) {
       long legs = ledgerEntryRepository.countByMovementGroupId(tx.getMovementGroupId());
@@ -133,15 +134,14 @@ class MoneyCorrectnessIntegrationTest {
     }
 
     assertThat(ledgerEntryRepository.findAll()).hasSize(4);
-    // deposit: 2 legs; transfer: 2 legs
   }
 
   @Test
   void insufficientWithdraw_shouldEndPendingAsFailed_withoutLedgerOrBalanceChange() {
-    walletService.deposit(userId, travel.getId(), new MoneyRequest(new BigDecimal("10.00"), "seed"));
+    walletService.deposit(userId, travel.getId(), new MoneyRequest(1_000L, "seed"));
 
     assertThatThrownBy(() ->
-        walletService.withdraw(userId, travel.getId(), new MoneyRequest(new BigDecimal("99.00"), "fail"))
+        walletService.withdraw(userId, travel.getId(), new MoneyRequest(9_900L, "fail"))
     ).isInstanceOf(InsufficientFundsException.class);
 
     List<WalletTransaction> failed = walletTransactionRepository.findAll().stream()
@@ -152,12 +152,12 @@ class MoneyCorrectnessIntegrationTest {
     assertThat(failed.get(0).getStatus()).isEqualTo(TransactionStatus.FAILED);
     assertThat(failed.get(0).getFailureReason()).contains("Insufficient");
     assertThat(ledgerEntryRepository.countByMovementGroupId(failed.get(0).getMovementGroupId())).isZero();
-    assertThat(walletRepository.findById(travel.getId()).orElseThrow().getBalance()).isEqualByComparingTo("10.00");
+    assertThat(walletRepository.findById(travel.getId()).orElseThrow().getBalance()).isEqualTo(1_000L);
   }
 
   @Test
   void completedTransactions_andLedgerEntries_areImmutableInDatabase() {
-    walletService.deposit(userId, travel.getId(), new MoneyRequest(new BigDecimal("12.34"), "immutable"));
+    walletService.deposit(userId, travel.getId(), new MoneyRequest(1_234L, "immutable"));
 
     WalletTransaction completed = walletTransactionRepository.findAll().stream()
         .filter(tx -> tx.getStatus() == TransactionStatus.COMPLETED)
@@ -166,11 +166,11 @@ class MoneyCorrectnessIntegrationTest {
     LedgerEntry entry = ledgerEntryRepository.findAll().get(0);
 
     assertThatThrownBy(() ->
-        jdbcTemplate.update("UPDATE transactions SET amount = 1.00 WHERE id = ?", completed.getId())
+        jdbcTemplate.update("UPDATE transactions SET amount = 1 WHERE id = ?", completed.getId())
     ).hasMessageContaining("immutable");
 
     assertThatThrownBy(() ->
-        jdbcTemplate.update("UPDATE ledger_entries SET amount = 1.00 WHERE id = ?", entry.getId())
+        jdbcTemplate.update("UPDATE ledger_entries SET amount = 1 WHERE id = ?", entry.getId())
     ).hasMessageContaining("immutable");
 
     assertThatThrownBy(() ->
@@ -183,7 +183,7 @@ class MoneyCorrectnessIntegrationTest {
     Long walletId = travel.getId();
 
     assertThatThrownBy(() ->
-        jdbcTemplate.update("UPDATE wallets SET balance = -0.01 WHERE id = ?", walletId)
+        jdbcTemplate.update("UPDATE wallets SET balance = -1 WHERE id = ?", walletId)
     ).hasMessageContaining("wallets_balance_non_negative");
 
     assertThatThrownBy(() ->
@@ -200,37 +200,35 @@ class MoneyCorrectnessIntegrationTest {
   }
 
   @Test
-  void moneyColumns_useNumericNotFloatingPoint() {
+  void moneyColumns_useBigintMinorUnitsNotNumericOrFloat() {
     List<Map<String, Object>> walletCols = jdbcTemplate.queryForList(
         """
-        SELECT data_type, numeric_precision, numeric_scale
+        SELECT data_type
         FROM information_schema.columns
         WHERE table_name = 'wallets' AND column_name = 'balance'
         """
     );
     List<Map<String, Object>> ledgerCols = jdbcTemplate.queryForList(
         """
-        SELECT data_type, numeric_precision, numeric_scale
+        SELECT data_type
         FROM information_schema.columns
         WHERE table_name = 'ledger_entries' AND column_name = 'amount'
         """
     );
 
     assertThat(walletCols).hasSize(1);
-    assertThat(walletCols.get(0).get("data_type")).isEqualTo("numeric");
-    assertThat(walletCols.get(0).get("numeric_scale")).isEqualTo(2);
+    assertThat(walletCols.get(0).get("data_type")).isEqualTo("bigint");
 
     assertThat(ledgerCols).hasSize(1);
-    assertThat(ledgerCols.get(0).get("data_type")).isEqualTo("numeric");
-    assertThat(ledgerCols.get(0).get("numeric_scale")).isEqualTo(2);
+    assertThat(ledgerCols.get(0).get("data_type")).isEqualTo("bigint");
   }
 
   @Test
   void transfer_isTwoWalletLegsThatConserveMoney() {
-    walletService.deposit(userId, travel.getId(), new MoneyRequest(new BigDecimal("100.00"), "seed"));
+    walletService.deposit(userId, travel.getId(), new MoneyRequest(10_000L, "seed"));
     walletService.transfer(
         userId,
-        new TransferRequest(travel.getId(), savings.getId(), new BigDecimal("35.00"), "pair")
+        new TransferRequest(travel.getId(), savings.getId(), 3_500L, "pair")
     );
 
     UUID groupId = walletTransactionRepository.findAll().stream()
@@ -246,27 +244,26 @@ class MoneyCorrectnessIntegrationTest {
     assertThat(transferLegs).hasSize(2);
     assertThat(transferLegs).allMatch(e -> e.getAccountKind() == LedgerAccountKind.WALLET);
 
-    BigDecimal debits = transferLegs.stream()
+    long debits = transferLegs.stream()
         .filter(e -> e.getDirection() == LedgerDirection.DEBIT)
-        .map(LedgerEntry::getAmount)
-        .reduce(BigDecimal.ZERO, BigDecimal::add);
-    BigDecimal credits = transferLegs.stream()
+        .mapToLong(LedgerEntry::getAmount)
+        .sum();
+    long credits = transferLegs.stream()
         .filter(e -> e.getDirection() == LedgerDirection.CREDIT)
-        .map(LedgerEntry::getAmount)
-        .reduce(BigDecimal.ZERO, BigDecimal::add);
+        .mapToLong(LedgerEntry::getAmount)
+        .sum();
 
-    assertThat(debits).isEqualByComparingTo(credits);
-    assertThat(walletRepository.findById(travel.getId()).orElseThrow().getBalance()).isEqualByComparingTo("65.00");
-    assertThat(walletRepository.findById(savings.getId()).orElseThrow().getBalance()).isEqualByComparingTo("35.00");
+    assertThat(debits).isEqualTo(credits);
+    assertThat(walletRepository.findById(travel.getId()).orElseThrow().getBalance()).isEqualTo(6_500L);
+    assertThat(walletRepository.findById(savings.getId()).orElseThrow().getBalance()).isEqualTo(3_500L);
   }
 
   @Test
   void compensatingEntry_wouldBeANewOppositeMovement_notAnUpdate() {
-    // Documented proof: mistakes are fixed by new COMPLETED movements, never by rewriting history.
-    walletService.deposit(userId, travel.getId(), new MoneyRequest(new BigDecimal("20.00"), "mistaken"));
-    walletService.withdraw(userId, travel.getId(), new MoneyRequest(new BigDecimal("20.00"), "compensate mistaken deposit"));
+    walletService.deposit(userId, travel.getId(), new MoneyRequest(2_000L, "mistaken"));
+    walletService.withdraw(userId, travel.getId(), new MoneyRequest(2_000L, "compensate mistaken deposit"));
 
-    assertThat(walletRepository.findById(travel.getId()).orElseThrow().getBalance()).isEqualByComparingTo("0.00");
+    assertThat(walletRepository.findById(travel.getId()).orElseThrow().getBalance()).isEqualTo(0L);
     assertThat(reconciliationService.reconcile().isFullyReconciled()).isTrue();
     assertThat(walletTransactionRepository.findAll()).allMatch(tx ->
         tx.getStatus() == TransactionStatus.COMPLETED

@@ -13,7 +13,6 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
-import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
 
@@ -44,8 +43,9 @@ public class LedgerEntry {
   @Column(nullable = false, length = 10)
   private LedgerDirection direction;
 
-  @Column(nullable = false, precision = 19, scale = 2)
-  private BigDecimal amount;
+  /** Positive amount in integer minor units (cents). */
+  @Column(nullable = false)
+  private long amount;
 
   @Column(name = "created_at", nullable = false)
   private Instant createdAt = Instant.now();
@@ -74,7 +74,7 @@ public class LedgerEntry {
     return direction;
   }
 
-  public BigDecimal getAmount() {
+  public long getAmount() {
     return amount;
   }
 
@@ -102,7 +102,7 @@ public class LedgerEntry {
     this.direction = direction;
   }
 
-  public void setAmount(BigDecimal amount) {
+  public void setAmount(long amount) {
     this.amount = amount;
   }
 }

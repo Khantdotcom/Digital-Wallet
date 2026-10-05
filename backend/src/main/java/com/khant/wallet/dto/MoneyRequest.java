@@ -1,15 +1,15 @@
 package com.khant.wallet.dto;
 
-import jakarta.validation.constraints.DecimalMin;
-import jakarta.validation.constraints.Digits;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
-import java.math.BigDecimal;
 
+/**
+ * Money movement request. {@code amount} is integer minor units (cents), not major currency units.
+ */
 public record MoneyRequest(
     @NotNull(message = "amount is required")
-    @DecimalMin(value = "0.01", message = "amount must be greater than 0")
-    @Digits(integer = 17, fraction = 2, message = "amount must use at most 2 decimal places")
-    BigDecimal amount,
+    @Min(value = 1, message = "amount must be at least 1 minor unit")
+    Long amount,
     String note
 ) {
 }

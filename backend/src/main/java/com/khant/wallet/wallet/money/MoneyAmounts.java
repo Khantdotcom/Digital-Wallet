@@ -1,34 +1,28 @@
 package com.khant.wallet.wallet.money;
 
-import java.math.BigDecimal;
-import java.math.RoundingMode;
-
 /**
- * Safe money helpers. TravelPay stores cash as {@link BigDecimal} with scale 2
- * (DECIMAL in Postgres) — never {@code double}/{@code float}.
+ * Safe money helpers. TravelPay stores cash as integer <em>minor units</em>
+ * (cents for a two-decimal currency) — never {@code double}/{@code float}, and
+ * no longer {@link java.math.BigDecimal} scale-2 on the ledger path.
  */
 public final class MoneyAmounts {
 
-  public static final int SCALE = 2;
+  /** Assumed ISO-style exponent for the demo currency (USD cents). */
+  public static final int MINOR_UNITS_EXPONENT = 2;
 
   private MoneyAmounts() {
   }
 
   /**
-   * Normalize and validate a money amount. Rejects null, non-positive values,
-   * and more than two decimal places (avoids silent rounding of millicents).
+   * Validate a money amount in minor units. Rejects null and non-positive values.
    */
-  public static BigDecimal requirePositiveMoney(BigDecimal amount) {
-    if (amount == null) {
+  public static long requirePositiveMinorUnits(Long amountMinorUnits) {
+    if (amountMinorUnits == null) {
       throw new IllegalArgumentException("amount is required");
     }
-    if (amount.scale() > SCALE) {
-      throw new IllegalArgumentException("amount must have at most " + SCALE + " decimal places");
+    if (amountMinorUnits <= 0L) {
+      throw new IllegalArgumentException("amount must be greater than 0 minor units");
     }
-    BigDecimal normalized = amount.setScale(SCALE, RoundingMode.UNNECESSARY);
-    if (normalized.compareTo(BigDecimal.ZERO) <= 0) {
-      throw new IllegalArgumentException("amount must be greater than 0");
-    }
-    return normalized;
+    return amountMinorUnits;
   }
 }

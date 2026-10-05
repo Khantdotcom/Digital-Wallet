@@ -88,5 +88,5 @@ Open `http://localhost:4173`
 
 ## Money correctness (Phase 01)
 
-Wallets keep a cached `balance`, but completed money movements also write immutable double-entry `ledger_entries` (debits always equal credits). User-facing `transactions` move through `PENDING → COMPLETED|FAILED`. Amounts are `NUMERIC(19,2)` / `BigDecimal` — never floating point. Database checks reject negative balances and non-positive amounts; terminal rows cannot be rewritten (compensate with a new opposite movement instead).
+Wallets keep a cached `balance`, but completed money movements also write immutable double-entry `ledger_entries` (debits always equal credits). User-facing `transactions` move through `PENDING → COMPLETED|FAILED`. Amounts are integer **minor units** (`BIGINT` / `long` cents) — never floating point and no longer DECIMAL/`BigDecimal` on the ledger path. API `amount` / `balance` fields are cents. Database checks reject negative balances and non-positive amounts; terminal rows cannot be rewritten (compensate with a new opposite movement instead). Reconciliation stays service/test-only for now (no admin HTTP endpoint yet).
 
