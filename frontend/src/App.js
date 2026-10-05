@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "https://esm.sh/react@18.3.1";
 
-const DEFAULT_API_BASE = "http://localhost:8080";
+const DEFAULT_API_BASE =
+  (typeof window !== "undefined" && window.__WALLET_API_BASE__) || "http://localhost:8080";
 
 export function App({ initialAuthView = "login" }) {
   const [authView, setAuthView] = useState(initialAuthView);

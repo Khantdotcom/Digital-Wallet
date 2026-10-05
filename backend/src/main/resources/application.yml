@@ -1,11 +1,18 @@
 server:
-  port: ${SERVER_PORT:8080}
+  # Railway injects PORT; local Compose / Maven can use SERVER_PORT or the 8080 default.
+  port: ${PORT:${SERVER_PORT:8080}}
 
 spring:
   datasource:
     url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5433/walletdb}
     username: ${SPRING_DATASOURCE_USERNAME:wallet}
     password: ${SPRING_DATASOURCE_PASSWORD:wallet}
+    hikari:
+      # Small pools fit Free/Hobby RAM. minimum-idle 0 + short idle timeout helps
+      # Railway Serverless (sleep) by dropping quiet Postgres connections.
+      maximum-pool-size: ${SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE:5}
+      minimum-idle: ${SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE:0}
+      idle-timeout: ${SPRING_DATASOURCE_HIKARI_IDLE_TIMEOUT:10000}
   jpa:
     hibernate:
       ddl-auto: validate

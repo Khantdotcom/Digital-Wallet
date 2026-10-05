@@ -46,7 +46,9 @@ graph LR
 ### Deploy Phase 01 with Docker Compose (recommended)
 
 ```bash
-git checkout cursor/phase-01-money-correctness-e892
+git checkout main   # Phase 01 money correctness
+# For Railway PORT/Hikari + optional Vercel UI files (until merged):
+# git checkout cursor/phase-01-railway-free-deploy-3f2d
 cp .env.example .env   # edit APP_JWT_SECRET / POSTGRES_PASSWORD for shared envs
 docker compose up --build -d
 ./scripts/smoke-test.sh
@@ -56,7 +58,7 @@ docker compose up --build -d
 - Frontend demo: `http://localhost:4173`
 - Postgres host port: `5433`
 
-Full steps, env vars, tear-down, and limitations: project store doc `docs/phase-01-deployment.md` (also summarized in PR #18).
+Full steps, env vars, tear-down, and limitations: project store doc `docs/phase-01-deployment.md`. Railway free/trial path: `docs/phase-01-railway-deploy.md`.
 
 ### Alternative: start PostgreSQL only, run API with Maven
 

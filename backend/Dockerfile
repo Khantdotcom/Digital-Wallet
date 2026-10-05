@@ -11,6 +11,10 @@ RUN apt-get update \
 WORKDIR /app
 COPY --from=build /app/target/wallet-api-0.0.1.jar app.jar
 EXPOSE 8080
+# Railway injects PORT; Compose / local leave the 8080 default (matches application.yml).
+ENV PORT=8080
+# Free/Hobby boxes are small; keep heap modest unless JAVA_OPTS overrides it.
+ENV JAVA_OPTS="-XX:MaxRAMPercentage=60.0 -XX:+UseContainerSupport"
 HEALTHCHECK --interval=10s --timeout=5s --start-period=60s --retries=12 \
-  CMD curl -sf http://localhost:8080/health || exit 1
-ENTRYPOINT ["java", "-jar", "app.jar"]
+  CMD curl -sf http://localhost:${PORT}/health || exit 1
+ENTRYPOINT ["sh", "-c", "java $JAVA_OPTS -jar app.jar"]
