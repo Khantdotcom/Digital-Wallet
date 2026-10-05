@@ -1,5 +1,6 @@
 server:
-  port: ${SERVER_PORT:8080}
+  # Railway injects PORT; local Compose / Maven can use SERVER_PORT or the 8080 default.
+  port: ${PORT:${SERVER_PORT:8080}}
 
 spring:
   datasource:
