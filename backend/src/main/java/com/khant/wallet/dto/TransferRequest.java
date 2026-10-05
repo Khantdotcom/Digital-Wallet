@@ -1,6 +1,7 @@
 package com.khant.wallet.dto;
 
 import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.Digits;
 import jakarta.validation.constraints.NotNull;
 import java.math.BigDecimal;
 
@@ -11,6 +12,7 @@ public record TransferRequest(
     Long targetWalletId,
     @NotNull(message = "amount is required")
     @DecimalMin(value = "0.01", message = "amount must be greater than 0")
+    @Digits(integer = 17, fraction = 2, message = "amount must use at most 2 decimal places")
     BigDecimal amount,
     String note
 ) {

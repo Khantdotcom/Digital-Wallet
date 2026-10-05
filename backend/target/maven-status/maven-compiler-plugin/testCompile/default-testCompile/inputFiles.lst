@@ -1,0 +1,4 @@
+/workspace/backend/src/test/java/com/khant/wallet/security/CorsConfigTest.java
+/workspace/backend/src/test/java/com/khant/wallet/service/WalletServiceTest.java
+/workspace/backend/src/test/java/com/khant/wallet/wallet/MoneyCorrectnessIntegrationTest.java
+/workspace/backend/src/test/java/com/khant/wallet/wallet/ledger/LedgerPostingServiceTest.java

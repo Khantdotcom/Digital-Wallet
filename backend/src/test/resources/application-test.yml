@@ -1,9 +1,6 @@
-server:
-  port: 8080
-
 spring:
   datasource:
-    url: jdbc:postgresql://localhost:5433/walletdb
+    url: jdbc:postgresql://localhost:5432/walletdb
     username: wallet
     password: wallet
   jpa:
@@ -12,12 +9,12 @@ spring:
     open-in-view: false
   flyway:
     enabled: true
+    clean-disabled: false
 
 app:
   jwt:
-    secret: replace-this-with-a-secure-32-byte-minimum-secret-key
+    secret: test-secret-key-with-at-least-thirty-two-bytes
     expiration-seconds: 3600
   cors:
     allowed-origin-patterns:
       - http://localhost:*
-      - http://127.0.0.1:*

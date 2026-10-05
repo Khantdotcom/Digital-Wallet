@@ -85,3 +85,8 @@ Open `http://localhost:4173`
 - **Protected path**: all wallet operations (`create/list/deposit/withdraw/transfer/history`) require JWT, are handled by `WalletController`, and execute transactional logic in `WalletService`.
 - **Risk scoring**: each money movement is assessed by `RiskService` using pluggable `RiskRule` components and persisted as `risk_events`.
 - **Persistence**: all repositories store domain data in PostgreSQL, with schema managed by Flyway migrations.
+
+## Money correctness (Phase 01)
+
+Wallets keep a cached `balance`, but completed money movements also write immutable double-entry `ledger_entries` (debits always equal credits). User-facing `transactions` move through `PENDING → COMPLETED|FAILED`. Amounts are `NUMERIC(19,2)` / `BigDecimal` — never floating point. Database checks reject negative balances and non-positive amounts; terminal rows cannot be rewritten (compensate with a new opposite movement instead).
+

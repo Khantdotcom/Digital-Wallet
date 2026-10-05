@@ -1,5 +1,6 @@
 package com.khant.wallet.service;
 
+import com.khant.wallet.domain.TransactionStatus;
 import com.khant.wallet.domain.TransactionType;
 import com.khant.wallet.domain.User;
 import com.khant.wallet.domain.Wallet;
@@ -12,12 +13,15 @@ import com.khant.wallet.dto.TransferRequest;
 import com.khant.wallet.exception.InsufficientFundsException;
 import com.khant.wallet.exception.WalletNotFoundException;
 import com.khant.wallet.repository.UserRepository;
-import com.khant.wallet.risk.RiskService;
-import com.khant.wallet.risk.WalletOperation;
 import com.khant.wallet.repository.WalletRepository;
 import com.khant.wallet.repository.WalletTransactionRepository;
+import com.khant.wallet.risk.RiskService;
+import com.khant.wallet.risk.WalletOperation;
+import com.khant.wallet.wallet.ledger.LedgerPostingService;
+import com.khant.wallet.wallet.money.MoneyAmounts;
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.UUID;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -30,17 +34,20 @@ public class WalletService {
   private final WalletTransactionRepository walletTransactionRepository;
   private final UserRepository userRepository;
   private final RiskService riskService;
+  private final LedgerPostingService ledgerPostingService;
 
   public WalletService(
       WalletRepository walletRepository,
       WalletTransactionRepository walletTransactionRepository,
       UserRepository userRepository,
-      RiskService riskService
+      RiskService riskService,
+      LedgerPostingService ledgerPostingService
   ) {
     this.walletRepository = walletRepository;
     this.walletTransactionRepository = walletTransactionRepository;
     this.userRepository = userRepository;
     this.riskService = riskService;
+    this.ledgerPostingService = ledgerPostingService;
   }
 
   @Transactional
@@ -51,7 +58,7 @@ public class WalletService {
     Wallet wallet = new Wallet();
     wallet.setUser(user);
     wallet.setName(request.name().trim());
-    wallet.setBalance(BigDecimal.ZERO);
+    wallet.setBalance(BigDecimal.ZERO.setScale(MoneyAmounts.SCALE));
 
     return walletRepository.save(wallet);
   }
@@ -63,51 +70,72 @@ public class WalletService {
 
   @Transactional
   public Wallet deposit(Long userId, Long walletId, MoneyRequest request) {
+    BigDecimal amount = MoneyAmounts.requirePositiveMoney(request.amount());
     Wallet wallet = walletRepository.findByIdAndUserIdForUpdate(walletId, userId)
         .orElseThrow(() -> new WalletNotFoundException(walletId));
 
-    riskService.assessAndRecord(userId, walletId, WalletOperation.DEPOSIT, request.amount());
+    riskService.assessAndRecord(userId, walletId, WalletOperation.DEPOSIT, amount);
 
-    wallet.setBalance(wallet.getBalance().add(request.amount()));
-
-    WalletTransaction tx = new WalletTransaction();
-    tx.setWallet(wallet);
-    tx.setType(TransactionType.DEPOSIT);
-    tx.setAmount(request.amount());
-    tx.setNote(request.note());
+    WalletTransaction tx = newPendingMovement(
+        wallet,
+        null,
+        TransactionType.DEPOSIT,
+        amount,
+        request.note(),
+        userId,
+        UUID.randomUUID()
+    );
     walletTransactionRepository.save(tx);
+
+    wallet.setBalance(wallet.getBalance().add(amount));
+    ledgerPostingService.postDeposit(tx, wallet, amount);
+    tx.markCompleted();
 
     return wallet;
   }
 
-  @Transactional
+  /**
+   * Insufficient-funds failures keep their FAILED movement row for audit.
+   * Without {@code noRollbackFor}, the exception would erase the PENDING→FAILED trail.
+   */
+  @Transactional(noRollbackFor = InsufficientFundsException.class)
   public Wallet withdraw(Long userId, Long walletId, MoneyRequest request) {
+    BigDecimal amount = MoneyAmounts.requirePositiveMoney(request.amount());
     Wallet wallet = walletRepository.findByIdAndUserIdForUpdate(walletId, userId)
         .orElseThrow(() -> new WalletNotFoundException(walletId));
 
-    riskService.assessAndRecord(userId, walletId, WalletOperation.WITHDRAW, request.amount());
+    riskService.assessAndRecord(userId, walletId, WalletOperation.WITHDRAW, amount);
 
-    if (wallet.getBalance().compareTo(request.amount()) < 0) {
+    WalletTransaction tx = newPendingMovement(
+        wallet,
+        null,
+        TransactionType.WITHDRAW,
+        amount,
+        request.note(),
+        userId,
+        UUID.randomUUID()
+    );
+    walletTransactionRepository.save(tx);
+
+    if (wallet.getBalance().compareTo(amount) < 0) {
+      tx.markFailed("Insufficient funds");
       throw new InsufficientFundsException(walletId);
     }
 
-    wallet.setBalance(wallet.getBalance().subtract(request.amount()));
-
-    WalletTransaction tx = new WalletTransaction();
-    tx.setWallet(wallet);
-    tx.setType(TransactionType.WITHDRAW);
-    tx.setAmount(request.amount());
-    tx.setNote(request.note());
-    walletTransactionRepository.save(tx);
+    wallet.setBalance(wallet.getBalance().subtract(amount));
+    ledgerPostingService.postWithdraw(tx, wallet, amount);
+    tx.markCompleted();
 
     return wallet;
   }
 
-  @Transactional
+  @Transactional(noRollbackFor = InsufficientFundsException.class)
   public List<Wallet> transfer(Long userId, TransferRequest request) {
     if (request.sourceWalletId().equals(request.targetWalletId())) {
       throw new IllegalArgumentException("sourceWalletId and targetWalletId must differ");
     }
+
+    BigDecimal amount = MoneyAmounts.requirePositiveMoney(request.amount());
 
     List<Long> orderedIds = request.sourceWalletId() < request.targetWalletId()
         ? List.of(request.sourceWalletId(), request.targetWalletId())
@@ -127,31 +155,42 @@ public class WalletService {
       throw new WalletNotFoundException(request.sourceWalletId());
     }
 
-    riskService.assessAndRecord(userId, source.getId(), WalletOperation.TRANSFER, request.amount());
+    riskService.assessAndRecord(userId, source.getId(), WalletOperation.TRANSFER, amount);
 
-    if (source.getBalance().compareTo(request.amount()) < 0) {
+    UUID movementGroupId = UUID.randomUUID();
+
+    WalletTransaction outTx = newPendingMovement(
+        source,
+        target,
+        TransactionType.TRANSFER_OUT,
+        amount,
+        request.note(),
+        userId,
+        movementGroupId
+    );
+    WalletTransaction inTx = newPendingMovement(
+        target,
+        source,
+        TransactionType.TRANSFER_IN,
+        amount,
+        request.note(),
+        userId,
+        movementGroupId
+    );
+    walletTransactionRepository.save(outTx);
+    walletTransactionRepository.save(inTx);
+
+    if (source.getBalance().compareTo(amount) < 0) {
+      outTx.markFailed("Insufficient funds");
+      inTx.markFailed("Insufficient funds");
       throw new InsufficientFundsException(source.getId());
     }
 
-    source.setBalance(source.getBalance().subtract(request.amount()));
-    target.setBalance(target.getBalance().add(request.amount()));
-
-    WalletTransaction outTx = new WalletTransaction();
-    outTx.setWallet(source);
-    outTx.setRelatedWallet(target);
-    outTx.setType(TransactionType.TRANSFER_OUT);
-    outTx.setAmount(request.amount());
-    outTx.setNote(request.note());
-
-    WalletTransaction inTx = new WalletTransaction();
-    inTx.setWallet(target);
-    inTx.setRelatedWallet(source);
-    inTx.setType(TransactionType.TRANSFER_IN);
-    inTx.setAmount(request.amount());
-    inTx.setNote(request.note());
-
-    walletTransactionRepository.save(outTx);
-    walletTransactionRepository.save(inTx);
+    source.setBalance(source.getBalance().subtract(amount));
+    target.setBalance(target.getBalance().add(amount));
+    ledgerPostingService.postTransfer(outTx, inTx, source, target, amount);
+    outTx.markCompleted();
+    inTx.markCompleted();
 
     return List.of(source, target);
   }
@@ -174,6 +213,27 @@ public class WalletService {
     );
   }
 
+  private WalletTransaction newPendingMovement(
+      Wallet wallet,
+      Wallet relatedWallet,
+      TransactionType type,
+      BigDecimal amount,
+      String note,
+      Long userId,
+      UUID movementGroupId
+  ) {
+    WalletTransaction tx = new WalletTransaction();
+    tx.setWallet(wallet);
+    tx.setRelatedWallet(relatedWallet);
+    tx.setType(type);
+    tx.setAmount(amount);
+    tx.setNote(note);
+    tx.setCreatedByUserId(userId);
+    tx.setMovementGroupId(movementGroupId);
+    tx.setStatus(TransactionStatus.PENDING);
+    return tx;
+  }
+
   private TransactionHistoryItemResponse toHistoryItem(WalletTransaction transaction) {
     Long relatedWalletId = transaction.getRelatedWallet() == null ? null : transaction.getRelatedWallet().getId();
     return new TransactionHistoryItemResponse(
@@ -181,9 +241,13 @@ public class WalletService {
         transaction.getWallet().getId(),
         relatedWalletId,
         transaction.getType(),
+        transaction.getStatus(),
         transaction.getAmount(),
         transaction.getNote(),
-        transaction.getCreatedAt()
+        transaction.getCreatedAt(),
+        transaction.getCompletedAt(),
+        transaction.getMovementGroupId(),
+        transaction.getFailureReason()
     );
   }
 }

@@ -8,8 +8,10 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.khant.wallet.domain.TransactionStatus;
 import com.khant.wallet.domain.User;
 import com.khant.wallet.domain.Wallet;
+import com.khant.wallet.domain.WalletTransaction;
 import com.khant.wallet.dto.MoneyRequest;
 import com.khant.wallet.dto.TransferRequest;
 import com.khant.wallet.exception.InsufficientFundsException;
@@ -18,11 +20,13 @@ import com.khant.wallet.repository.WalletRepository;
 import com.khant.wallet.repository.WalletTransactionRepository;
 import com.khant.wallet.risk.RiskService;
 import com.khant.wallet.risk.WalletOperation;
+import com.khant.wallet.wallet.ledger.LedgerPostingService;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -43,24 +47,32 @@ class WalletServiceTest {
   @Mock
   private RiskService riskService;
 
+  @Mock
+  private LedgerPostingService ledgerPostingService;
+
   @InjectMocks
   private WalletService walletService;
 
   @Test
-  void withdraw_shouldThrow_whenInsufficientFunds() {
+  void withdraw_shouldMarkFailedAndThrow_whenInsufficientFunds() {
     Long userId = 1L;
     Long walletId = 10L;
     Wallet wallet = wallet(walletId, userId, new BigDecimal("5.00"));
     MoneyRequest request = new MoneyRequest(new BigDecimal("10.00"), "atm");
 
     when(walletRepository.findByIdAndUserIdForUpdate(walletId, userId)).thenReturn(Optional.of(wallet));
+    when(walletTransactionRepository.save(any(WalletTransaction.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
     assertThatThrownBy(() -> walletService.withdraw(userId, walletId, request))
         .isInstanceOf(InsufficientFundsException.class)
         .hasMessageContaining("Insufficient funds");
 
+    ArgumentCaptor<WalletTransaction> txCaptor = ArgumentCaptor.forClass(WalletTransaction.class);
+    verify(walletTransactionRepository).save(txCaptor.capture());
+    assertThat(txCaptor.getValue().getStatus()).isEqualTo(TransactionStatus.FAILED);
+    assertThat(wallet.getBalance()).isEqualByComparingTo("5.00");
     verify(riskService).assessAndRecord(userId, walletId, WalletOperation.WITHDRAW, request.amount());
-    verify(walletTransactionRepository, never()).save(any());
+    verify(ledgerPostingService, never()).postWithdraw(any(), any(), any());
   }
 
   @Test
@@ -84,6 +96,7 @@ class WalletServiceTest {
     TransferRequest request = new TransferRequest(1L, 2L, new BigDecimal("30.00"), "rent");
 
     when(walletRepository.findAllByIdInForUpdateOrdered(List.of(1L, 2L))).thenReturn(List.of(source, target));
+    when(walletTransactionRepository.save(any(WalletTransaction.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
     List<Wallet> result = walletService.transfer(userId, request);
 
@@ -92,6 +105,20 @@ class WalletServiceTest {
     assertThat(target.getBalance()).isEqualByComparingTo("55.00");
     verify(riskService).assessAndRecord(userId, 1L, WalletOperation.TRANSFER, request.amount());
     verify(walletTransactionRepository, times(2)).save(any());
+    verify(ledgerPostingService).postTransfer(any(), any(), any(), any(), any());
+  }
+
+  @Test
+  void deposit_shouldRejectMoreThanTwoDecimalPlaces() {
+    Long userId = 1L;
+    Long walletId = 10L;
+    MoneyRequest request = new MoneyRequest(new BigDecimal("10.001"), "bad scale");
+
+    assertThatThrownBy(() -> walletService.deposit(userId, walletId, request))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("decimal places");
+
+    verify(walletRepository, never()).findByIdAndUserIdForUpdate(any(), any());
   }
 
   private Wallet wallet(Long walletId, Long userId, BigDecimal balance) {
