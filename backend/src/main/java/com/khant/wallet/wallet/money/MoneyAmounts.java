@@ -1,7 +1,7 @@
 package com.khant.wallet.wallet.money;
 
 /**
- * Safe money helpers. Money Engine stores cash as integer <em>minor units</em>
+ * Safe money helpers. Vinter Ledger stores cash as integer <em>minor units</em>
  * (cents for a two-decimal currency) — never {@code double}/{@code float}, and
  * no longer {@link java.math.BigDecimal} scale-2 on the ledger path.
  */

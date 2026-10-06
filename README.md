@@ -1,8 +1,8 @@
-# Vinter Money Engine
+# Vinter Ledger
 
 **Multi-tenant payment & ledger infrastructure** — wallet balances, double-entry ledger posts, and risk-scored money movements behind a Spring Boot API. Card rails stay out of scope for Phase 01; this repo owns the application-finance core (integer minor units, append-only ledger, JWT-protected wallet ops).
 
-Repo folder name may still say Digital-Wallet; product identity is **Vinter Money Engine**.
+Repo folder name may still say Digital-Wallet; product identity is **Vinter Ledger**.
 
 ## Backend Architecture Diagram
 
