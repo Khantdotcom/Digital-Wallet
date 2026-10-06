@@ -72,7 +72,7 @@ class MoneyCorrectnessIntegrationTest {
     jdbcTemplate.execute("TRUNCATE TABLE ledger_entries, transactions, risk_events, wallets, users RESTART IDENTITY CASCADE");
 
     User user = new User();
-    user.setEmail("phase01-" + UUID.randomUUID() + "@travelpay.test");
+    user.setEmail("phase01-" + UUID.randomUUID() + "@vinterledger.test");
     user.setPasswordHash(passwordEncoder.encode("password-123"));
     userId = userRepository.save(user).getId();
 
