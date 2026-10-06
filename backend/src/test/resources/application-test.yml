@@ -3,6 +3,9 @@ spring:
     url: jdbc:postgresql://localhost:5432/walletdb
     username: wallet
     password: wallet
+    hikari:
+      maximum-pool-size: 50
+      minimum-idle: 10
   jpa:
     hibernate:
       ddl-auto: validate

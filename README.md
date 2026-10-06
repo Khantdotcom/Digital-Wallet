@@ -108,3 +108,7 @@ Open `http://localhost:4173`
 
 Wallets keep a cached `balance`, but completed money movements also write immutable double-entry `ledger_entries` (debits always equal credits). User-facing `transactions` move through `PENDING → COMPLETED|FAILED`. Amounts are integer **minor units** (`BIGINT` / `long` cents) — never floating point and no longer DECIMAL/`BigDecimal` on the ledger path. API `amount` / `balance` fields are cents. Database checks reject negative balances and non-positive amounts; terminal rows cannot be rewritten (compensate with a new opposite movement instead). Reconciliation stays service/test-only for now (no admin HTTP endpoint yet).
 
+## Concurrency (Phase 02 / Lab 1)
+
+Wallet **deposit / withdraw / transfer** mutations take PostgreSQL row locks (`SELECT … FOR UPDATE`), lock two-wallet transfers in ascending wallet-id order (deadlock avoidance), and retry transient deadlocks through `WalletMoneyCommands` (bounded, outside the transaction). A `wallets.version` column supports optimistic comparison experiments; production authority remains pessimistic locking. Evidence: `ConcurrentWalletStressTest` (≥100 workers, 0 invariant violations) and `LockingStrategyComparisonTest` (pessimistic vs optimistic vs naive). ADR: [`backend/docs/adr/0002-wallet-locking-and-isolation.md`](backend/docs/adr/0002-wallet-locking-and-isolation.md). Gatling HTTP stress is reserved for Lab 4.
+
