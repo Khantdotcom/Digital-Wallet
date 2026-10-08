@@ -86,7 +86,7 @@ public class WalletService {
     );
     walletTransactionRepository.save(tx);
 
-    wallet.setBalance(wallet.getBalance() + amount);
+    wallet.applyBalanceDelta(amount);
     ledgerPostingService.postDeposit(tx, wallet, amount);
     tx.markCompleted();
 
@@ -121,7 +121,7 @@ public class WalletService {
       throw new InsufficientFundsException(walletId);
     }
 
-    wallet.setBalance(wallet.getBalance() - amount);
+    wallet.applyBalanceDelta(-amount);
     ledgerPostingService.postWithdraw(tx, wallet, amount);
     tx.markCompleted();
 
@@ -185,8 +185,8 @@ public class WalletService {
       throw new InsufficientFundsException(source.getId());
     }
 
-    source.setBalance(source.getBalance() - amount);
-    target.setBalance(target.getBalance() + amount);
+    source.applyBalanceDelta(-amount);
+    target.applyBalanceDelta(amount);
     ledgerPostingService.postTransfer(outTx, inTx, source, target, amount);
     outTx.markCompleted();
     inTx.markCompleted();

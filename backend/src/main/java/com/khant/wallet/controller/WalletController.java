@@ -8,6 +8,7 @@ import com.khant.wallet.dto.TransactionHistoryItemResponse;
 import com.khant.wallet.dto.TransferRequest;
 import com.khant.wallet.dto.WalletResponse;
 import com.khant.wallet.service.WalletService;
+import com.khant.wallet.wallet.concurrency.WalletMoneyCommands;
 import jakarta.validation.Valid;
 import java.util.List;
 import org.springframework.data.domain.Pageable;
@@ -25,9 +26,11 @@ import org.springframework.web.bind.annotation.RestController;
 public class WalletController {
 
   private final WalletService walletService;
+  private final WalletMoneyCommands walletMoneyCommands;
 
-  public WalletController(WalletService walletService) {
+  public WalletController(WalletService walletService, WalletMoneyCommands walletMoneyCommands) {
     this.walletService = walletService;
+    this.walletMoneyCommands = walletMoneyCommands;
   }
 
   @PostMapping
@@ -59,7 +62,7 @@ public class WalletController {
       @Valid @RequestBody MoneyRequest request
   ) {
     Long userId = (Long) authentication.getPrincipal();
-    return map(walletService.deposit(userId, walletId, request));
+    return map(walletMoneyCommands.deposit(userId, walletId, request));
   }
 
   @PostMapping("/{walletId}/withdraw")
@@ -69,13 +72,13 @@ public class WalletController {
       @Valid @RequestBody MoneyRequest request
   ) {
     Long userId = (Long) authentication.getPrincipal();
-    return map(walletService.withdraw(userId, walletId, request));
+    return map(walletMoneyCommands.withdraw(userId, walletId, request));
   }
 
   @PostMapping("/transfer")
   public List<WalletResponse> transfer(Authentication authentication, @Valid @RequestBody TransferRequest request) {
     Long userId = (Long) authentication.getPrincipal();
-    return walletService.transfer(userId, request).stream().map(this::map).toList();
+    return walletMoneyCommands.transfer(userId, request).stream().map(this::map).toList();
   }
 
   private WalletResponse map(Wallet wallet) {

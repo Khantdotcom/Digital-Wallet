@@ -31,6 +31,14 @@ public class Wallet {
   @Column(nullable = false)
   private long balance = 0L;
 
+  /**
+   * Optimistic concurrency token. Production mutations still take
+   * {@code SELECT … FOR UPDATE}; this increments on every balance change so
+   * Lab 1 can compare optimistic retries against pessimistic waits.
+   */
+  @Column(nullable = false)
+  private long version = 0L;
+
   @Column(name = "created_at", nullable = false)
   private Instant createdAt = Instant.now();
 
@@ -58,6 +66,10 @@ public class Wallet {
     return balance;
   }
 
+  public long getVersion() {
+    return version;
+  }
+
   public Instant getCreatedAt() {
     return createdAt;
   }
@@ -76,5 +88,15 @@ public class Wallet {
 
   public void setBalance(long balance) {
     this.balance = balance;
+  }
+
+  public void setVersion(long version) {
+    this.version = version;
+  }
+
+  /** Apply a balance mutation and bump the optimistic version token. */
+  public void applyBalanceDelta(long deltaMinorUnits) {
+    this.balance = this.balance + deltaMinorUnits;
+    this.version = this.version + 1L;
   }
 }
